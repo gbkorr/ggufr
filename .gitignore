@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+misc/
+inst/extdata/SmolLM3-3B-Q8_0.gguf
+
+*/*.DS_Store
+.DS_Store

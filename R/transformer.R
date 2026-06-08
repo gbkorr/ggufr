@@ -1,0 +1,179 @@
+
+#"especially interesting is tracking the dimensions as it goes trhough the model"
+
+
+#please add formulae for each of these
+softmax = function(v){x = exp(v - max(v)); x / sum(x)}
+attend = function(q,k,v,head_dim,mask){ #qkv heads
+  qk = t(apply( #apply softmax to each row
+    (q %*% t(k))/sqrt(head_dim) + mask,
+  1,softmax))
+  # qk: [n_tokens, n_tokens]
+
+  qk %*% v
+}
+SiLU = function(x) x/(1 + exp(-x))
+RMSN = function(v, norm, epsilon) norm * v / sqrt(mean(v^2) + epsilon)
+RoPE = function(v, pos, base, dims){
+  angles = pos * base ^ -(2*(1:(dims/2) - 1)/dims)
+
+  X = v[1:(dims/2)]
+  Y = v[dims/2 + 1:(dims/2)]
+  #i.e. v = c(X,Y)
+
+  #treat the first half of the dimensions as x positions, and the second half as y
+  #rotate these coordinate pairs, and return the new values
+
+  new.X = X * cos(angles) - Y * sin(angles)
+  new.Y = Y * cos(angles) + X * sin(angles)
+
+  c(new.X,new.Y)
+}
+
+
+#pass state matrix through a transformation layer
+Attention = function(input, layer, pos, model){
+  #If loading the model, input has 2048 columns and rows equal to the number of tokens in the prompt.
+  #If generating a token, input is 1 x 2048. (2048 being the embedding length). MUST be a matrix, not a vector!
+
+  #pos = In the entire conversation, this is the Nth token.
+
+  #input: [n_tokens, embedding_length] <- indicates dimension of a variable; [rows, columns]
+  warning('in the qmd, step through this process for the input layer, showing graphs of the image during.')
+
+  # ---- Variables ----
+  n_tokens = nrow(input)
+  embedding_length = ncol(input)
+
+  RMSN_epsilon = model$metadata$smollm3.attention.layer_norm_rms_epsilon$value
+  rope_base = model$metadata$smollm3.rope.freq_base$value
+  rope_dims = model$metadata$smollm3.rope.dimension_count$value
+
+  heads_q = model$metadata$smollm3.attention.head_count$value #number of Query heads
+  heads_kv = model$metadata$smollm3.attention.head_count_kv$value #number of Key/Value heads
+  head_dim = embedding_length / heads_q #values per head
+
+  # ---- Normalize Input ----
+  NormIn = t(apply(input, 1, function(x) RMSN(x, layer$attn_norm.weight, RMSN_epsilon))) #normalize by row
+  # NormIn: [n_tokens, embedding_length]
+
+  # ---- Get New Query/Key/Value Matrices ----
+  Q = NormIn %*% t(layer$attn_q.weight)
+  K = NormIn %*% t(layer$attn_k.weight)
+  V = NormIn %*% t(layer$attn_v.weight)
+  # Q: [n_tokens, embedding_length]
+  # KV: [n_tokens, head_dim * heads_kv]
+
+  # ---- Retrieve and Cache KV ----
+  cache = paste0('blk.',layer$id,'.KV.rds')
+  KV = readRDS(cache)
+  K = c(KV$K, K) #append new values
+  V = c(KV$V, V)
+  KV$K = K
+  KV$V = V
+  saveRDS(KV, cache, compress=TRUE)
+  # KV: [n_all_tokens_so_far, head_dim * heads_kv]
+
+  # ---- Break QKV into Heads ----
+  q = vector('list',heads_q)
+  k = vector('list',heads_kv)
+  v = vector('list',heads_kv)
+  for (i in 1:heads_q) {
+    q[[i]] = Q[,head_dim * (i - 1) + 1:head_dim,drop=FALSE]
+  }
+  for (i in 1:heads_kv) {
+    k[[i]] = K[,head_dim * (i - 1) + 1:head_dim,drop=FALSE]
+    v[[i]] = V[,head_dim * (i - 1) + 1:head_dim,drop=FALSE]
+  }
+  # q: list of length heads_q, [n_tokens, head_dim]
+  # kv: list of length heads_kv, [n_tokens, head_dim]
+  #note that while there are more Q heads than KV, all heads have the same dimensions.
+
+  # ---- Apply RoPE ----
+  #SmolLM3 skips every fourth layer (and calls this technique "NoPE", but I like to call it "Skipping Rope").
+  warning('you need to recache the tensors to get id')
+  if (layer$id %% 4 != 3){
+    #apply RoPE to each Q head, row-by-row
+    #(remember, when generating a regular token, there's only one row)
+    for (i in 1:heads_q) {
+      M = q[[i]]
+      for (t in 1:nrow(M)) M[t,] = RoPE(M[t,], pos + t - 1, rope_base, rope_dims) #position increases for each token
+      q[[i]] = M
+    }
+    #repeat for the K heads
+    for (i in 1:heads_kv) {
+      M = k[[i]]
+      for (t in 1:nrow(M)) M[t,] = RoPE(M[t,], pos + t - 1, rope_base, rope_dims)
+      k[[i]] = M
+    }
+  }
+
+  # ---- Apply Attention ----
+  ctx = vector('list',heads_q)
+  mask = matrix(0,n_tokens,n_tokens); mask[upper.tri(mask)] = -Inf #causal mask; each token can only respond to previous ones
+  for (i in 1:heads_q) { #get ctx for each Q head
+    kv_head = ceiling(i/(heads_q/heads_kv)) #which kv head? (each kv head is used for 4 q heads, hence GQA architecture)
+    ctx[[i]] = attend(q[[i]], k[[kv_head]], v[[kv_head]], head_dim, mask)
+  }
+  # ctx: list of length heads_q, [n_tokens, head_dim]
+
+  # ---- Reassemble Full Matrix ----
+  Context = matrix(0, n_tokens, embedding_length)
+  for (i in 1:heads_q) Context[,head_dim * (i - 1) + 1:head_dim] = ctx[[i]] #recombine ctx heads, the inverse of how we broke up Q
+  # Context: [n_tokens, embedding_length]
+
+  # ---- Project Output ----
+  Out = Context %*% t(layer$attn_output.weight)
+  # Out: [n_tokens, embedding_length]
+
+  # ---- Add to Input ----
+  input + Out
+}
+
+FFN = function(input, layer, model) {
+  # ---- Variables ----
+  n_tokens = nrow(input)
+  embedding_length = ncol(input)
+
+  RMSN_epsilon = model$metadata$smollm3.attention.layer_norm_rms_epsilon$value
+  feed_forward_length = model$metadata$smollm3.feed_forward_length$value
+
+  # ---- Normalize Input ----
+  NormIn = t(apply(input, 1, function(x) RMSN(x, layer$ffn_norm.weight, RMSN_epsilon))) #normalize by row
+  # NormIn: [n_tokens, embedding_length]
+
+  # ---- Project Up ----
+  G = NormX %*% t(get_tensor('blk.i.ffn_gate.weight',block)) #Gate
+  U = NormX %*% t(get_tensor('blk.i.ffn_up.weight',block)) #Up Weights
+  # G, U: [n_tokens, feed_forward_length]
+
+  # ---- Activate Weights ----
+  Activation = SiLU(G) * U
+  # Activation: [n_tokens, feed_forward_length]
+
+  # ---- Project Down ----
+  Out = Context %*% t(layer$ffn_down.weight)
+  # Out: [n_tokens, embedding_length]
+
+  # ---- Add to Input
+  input + Out
+}
+
+
+
+# ----  -----
+
+#put this in inferencer.R
+
+#n_layers = smollm3.block_count
+
+#initialize KV cache
+#for (layer in 1:n_layers){
+#  filename = paste0('blk.',layer,'.KV.rds')
+#  saveRDS(list(k=list(),v=list()),filename,compress=FALSE)
+#}
+
+#layer = readRDS(model$dir,paste0('blk.',layer,'.rds'))
+#remember to exit generation when eof token is reached
+#and put ggml_intToUtf8 in deembed
+
