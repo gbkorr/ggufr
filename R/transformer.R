@@ -96,15 +96,11 @@ Attention = function(input, layer, pos, model){
     #apply RoPE to each Q head, row-by-row
     #(remember, when generating a regular token, there's only one row)
     for (i in 1:heads_q) {
-      M = q[[i]]
-      for (t in 1:nrow(M)) M[t,] = RoPE(M[t,], pos + t - 1, rope_base, rope_dims) #position increases for each token
-      q[[i]] = M
+      for (t in 1:n_tokens) q[[i]][t,] = RoPE(q[[i]][t,], pos + t - 1, rope_base, rope_dims) #position increases for each token
     }
     #repeat for the K heads
     for (i in 1:heads_kv) {
-      M = k[[i]]
-      for (t in 1:nrow(M)) M[t,] = RoPE(M[t,], pos + t - 1, rope_base, rope_dims)
-      k[[i]] = M
+      for (t in 1:n_tokens) k[[i]][t,] = RoPE(k[[i]][t,], pos + t - 1, rope_base, rope_dims)
     }
   }
 

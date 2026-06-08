@@ -1,5 +1,7 @@
 #remember to REMOVE tensors folder from the codebase, since you should be using the tempdir
 #also, don't save the model? keep option to disable cache tensors?
+#preferably give less control over caching— just download the model to start, and go through the long tempdir loading every time you use it
+
 
 #the point of this project is more to have a readable codebase for understanding
 #what happens— not to provide great user-facing functions.
@@ -9,12 +11,18 @@
 #"some people know how the car parts work... I just like making the car and driving around"
 
 
-default_path = system.file("extdata", "SmolLM3-3B-Q8_0.gguf", package = "ggufr")
+default_path = paste0(tools::R_user_dir('ggufr'),"/SmolLM3-3B-Q8_0.gguf")
+
+download_model = function(path = default_path){
+  if (readline("This will download a 3GB file. Is this OK? Y/n ") %in% c('Y','y','Yes','yes')){
+    curl::curl_download(url="https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q8_0.gguf",path,quiet=FALSE)
+  }
+}
 
 #this function can read any GGUF if you set info_only=TRUE
 
 #R is REALLY bad at reading raw, so this function is more complex than it has to be :(
-read_gguf = function(path = default_path, info_only=FALSE, cache_dir=NULL, cache_tensors=TRUE){
+read_gguf = function(path = default_path, info_only=FALSE){
   con = file(path,'rb') #start reading file
   on.exit(close(con)) #close connection when done
 
@@ -261,48 +269,43 @@ read_gguf = function(path = default_path, info_only=FALSE, cache_dir=NULL, cache
   #---- Caching Tensors ----
   #tensor data is written to an Rds file in tempdir() for each layer, since R can't store every layer at once.
 
-  if (is.null(cache_dir)) cache_dir = tempdir()
-  else if (!endsWith(cache_dir,'/')) cache_dir = paste0(cache_dir,'/')
+  cache_dir = paste0(tempdir(),'/')
   model$dir = cache_dir
-  model$path = path
 
-  if (cache_tensors){
-    #cache non-layer tensors
-    list(
-      output_norm.weight = read_tensor(tensors$output_norm.weight),
-      token_embd.weight = read_tensor(tensors$token_embd.weight, verbose='Loading embedding matrix...')
-    ) |>
-      saveRDS(paste0(cache_dir,"embeddings.rds"),compress=FALSE)
+  #cache non-layer tensors
+  list(
+    output_norm.weight = read_tensor(tensors$output_norm.weight),
+    token_embd.weight = read_tensor(tensors$token_embd.weight, verbose='Loading embedding matrix...')
+  ) |>
+    saveRDS(paste0(cache_dir,"embeddings.rds"),compress=FALSE)
 
-    cat('\n')
+  cat('\n')
 
-    n_blocks = metadata$smollm3.block_count$value
-    for (i in 1:n_blocks){
-      block = i-1 #0-indexed
-      layer = list(id=block)
-      tensor_names = c(
-        "attn_k.weight",
-        "attn_norm.weight",
-        "attn_output.weight",
-        "attn_q.weight",
-        "attn_v.weight",
-        "ffn_down.weight",
-        "ffn_gate.weight",
-        "ffn_norm.weight",
-        "ffn_up.weight"
-      )
-      for (t in 1:length(tensor_names)) {
-        tensor = tensor_names[t]
-        verbose = paste0('Loading tensor "',tensor,'" (',t,'/',length(tensor_names),')')
-        layer[[tensor]] = tensors[[paste0('blk.',block,'.',tensor)]] |> read_tensor(verbose)
-      }
-      cat(sep='','\rCaching layer ',i,' / ',n_blocks,rep(' ',64),'\n')
-      saveRDS(layer,paste0(cache_dir,'blk.',block,".rds"),compress=FALSE)
+  n_blocks = metadata$smollm3.block_count$value
+  for (i in 1:n_blocks){
+    block = i-1 #0-indexed
+    layer = list(id=block)
+    tensor_names = c(
+      "attn_k.weight",
+      "attn_norm.weight",
+      "attn_output.weight",
+      "attn_q.weight",
+      "attn_v.weight",
+      "ffn_down.weight",
+      "ffn_gate.weight",
+      "ffn_norm.weight",
+      "ffn_up.weight"
+    )
+    for (t in 1:length(tensor_names)) {
+      tensor = tensor_names[t]
+      verbose = paste0('Loading tensor "',tensor,'" (',t,'/',length(tensor_names),')')
+      layer[[tensor]] = tensors[[paste0('blk.',block,'.',tensor)]] |> read_tensor(verbose)
     }
+    cat(sep='','\rCaching layer ',i,' / ',n_blocks,rep(' ',64),'\n')
+    saveRDS(layer,paste0(cache_dir,'blk.',block,".rds"),compress=FALSE)
   }
 
   #----
-  saveRDS(model,paste0(cache_dir,"model.rds"),compress=FALSE)
   model
 }
 
@@ -320,9 +323,6 @@ view_tensors = function(model){
   colnames(df) = c('cols','rows','type','offset')
   View(df,'Tensors')
 }
-
-
-#model = read_gguf('SmolLM3/SmolLM3-3B-Q8_0.gguf',cache_dir='blueprint/tensors/',cache_tensors=FALSE)
 
 
 
