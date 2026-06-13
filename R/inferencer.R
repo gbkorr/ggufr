@@ -8,13 +8,10 @@ unembed = function(input, embd, norm, epsilon){
   pick(probs)
 }
 pick = function(probs){
-  likely = sort(probs)[1:5]
-  plot(likely)
+  top5 = order(probs, decreasing=TRUE)[1:5]
+  cat(sep='', paste(reverse_token_lookup(top5), collapse = '\t\t'), '\n', paste(round(probs[top5]*100), collapse = '\t\t'),'\n')
 
-  ord = order(probs, decreasing=TRUE)[1:100]
-
-  print(reverse_token_lookup(ord[1:5],model))
-  sample(ord[1:3],1) #pick randomly from the top 3 next tokens
+  sample(1:length(probs), 1, prob=probs) #pick based on softmax
 }
 
 
@@ -22,7 +19,7 @@ infer = function(prompt,model){
   n_layers = model$metadata$smollm3.block_count$value
   RMSN_epsilon = model$metadata$smollm3.attention.layer_norm_rms_epsilon$value
 
-  response = c()
+  response = prompt
   pos = 0 #token position; Nth token is at pos N
 
   # ---- Tokenize Prompt ----

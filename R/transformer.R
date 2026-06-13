@@ -112,7 +112,8 @@ Attention = function(input, layer, model, pos){
 
   # ---- Apply Attention ----
   ctx = vector('list',heads_q)
-  mask = matrix(0,nrow(q[[1]]),nrow(k[[1]])); mask[upper.tri(mask)] = -Inf #causal mask; each token can only respond to previous ones
+  mask = matrix(0,nrow(q[[1]]),nrow(k[[1]])) #for regular prediction, don't mask anything
+  if (n_tokens != 1) mask[upper.tri(mask)] = -Inf #causal mask for prefill; each token can only respond to previous ones
   for (i in 1:heads_q) { #get ctx for each Q head
     kv_head = ceiling(i/(heads_q/heads_kv)) #which kv head? (each kv head is used for 4 q heads, hence GQA architecture)
     ctx[[i]] = attend(q[[i]], k[[kv_head]], v[[kv_head]], head_dim, mask)
