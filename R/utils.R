@@ -1,6 +1,6 @@
 
 
-#progress bar string 60% [======    ]
+
 progress = function(i,total,steps=10) {
   perc = round(100*i/total)
   sofar = floor(steps * i/total)
@@ -13,7 +13,5 @@ progress = function(i,total,steps=10) {
   )
 }
 
-
-
-
+time_since = function(t) strftime(as.numeric(Sys.time()) - t - 57600, '%H:%M:%S') #why does strftime(0, '%H') == 16??
 

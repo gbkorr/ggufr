@@ -18,17 +18,20 @@ RMSN = function(v, norm, epsilon) norm * v / sqrt(mean(v^2) + epsilon)
 RoPE = function(v, pos, base, dims){
   angles = pos * base ^ -(2*(1:(dims/2) - 1)/dims)
 
-  X = v[1:(dims/2)]
-  Y = v[dims/2 + 1:(dims/2)]
-  #i.e. v = c(X,Y)
+  #interleaved?
+  odds = seq(1, dims, by = 2)
+  evens = seq(2, dims, by = 2)
+
+  X = v[odds]
+  Y = v[evens]
 
   #treat the first half of the dimensions as x positions, and the second half as y
   #rotate these coordinate pairs, and return the new values
 
-  new.X = X * cos(angles) - Y * sin(angles)
-  new.Y = Y * cos(angles) + X * sin(angles)
+  v[odds] = X * cos(angles) - Y * sin(angles)
+  v[evens] = Y * cos(angles) + X * sin(angles)
 
-  c(new.X,new.Y)
+  v
 }
 
 
@@ -53,9 +56,13 @@ Attention = function(input, layer, model, pos){
   heads_kv = model$metadata$smollm3.attention.head_count_kv$value #number of Key/Value heads
   head_dim = embedding_length / heads_q #values per head
 
+    cat('norm, ')
+
   # ---- Normalize Input ----
   NormIn = t(apply(input, 1, function(x) RMSN(x, layer$attn_norm.weight, RMSN_epsilon))) #normalize by row
   # NormIn: [n_tokens, embedding_length]
+
+    cat('QKV, ')
 
   # ---- Get New Query/Key/Value Matrices ----
   Q = NormIn %*% t(layer$attn_q.weight)
@@ -63,6 +70,8 @@ Attention = function(input, layer, model, pos){
   V = NormIn %*% t(layer$attn_v.weight)
   # Q: [n_tokens, embedding_length]
   # KV: [n_tokens, head_dim * heads_kv]
+
+    cat('heads, ')
 
   # ---- Break QKV into Heads ----
   q = vector('list',heads_q)
@@ -81,7 +90,10 @@ Attention = function(input, layer, model, pos){
 
   # ---- Apply RoPE ----
   #SmolLM3 skips every fourth layer (and calls this technique "NoPE", but I like to call it "Skipping Rope").
-  if (layer$id %% 4 != 3){
+  if (layer$id %% 4 == 3) cat('NoPE, ')
+  else {
+    cat('RoPE, ')
+
     #apply RoPE to each Q head, row-by-row
     #(remember, when generating a regular token, there's only one row)
     for (i in 1:heads_q) {
@@ -92,6 +104,8 @@ Attention = function(input, layer, model, pos){
       for (t in 1:n_tokens) k[[i]][t,] = RoPE(k[[i]][t,], pos + t - 1, rope_base, rope_dims)
     }
   }
+
+    cat('cache, ')
 
   # ---- Retrieve and Cache KV ----
   cache = paste0(model$dir,'blk.',layer$id,'.kv.rds')
@@ -115,6 +129,8 @@ Attention = function(input, layer, model, pos){
   }
   # ctx: list of length heads_q, [n_tokens, head_dim]
 
+    cat('ctx, ')
+
   # ---- Reassemble Full Matrix ----
   Context = matrix(0, n_tokens, embedding_length)
   for (i in 1:heads_q) Context[,head_dim * (i - 1) + 1:head_dim] = ctx[[i]] #recombine ctx heads, the inverse of how we broke up Q
@@ -136,18 +152,26 @@ FFN = function(input, layer, model) {
   RMSN_epsilon = model$metadata$smollm3.attention.layer_norm_rms_epsilon$value
   feed_forward_length = model$metadata$smollm3.feed_forward_length$value
 
+    cat('norm, ')
+
   # ---- Normalize Input ----
   NormIn = t(apply(input, 1, function(x) RMSN(x, layer$ffn_norm.weight, RMSN_epsilon))) #normalize by row
   # NormIn: [n_tokens, embedding_length]
+
+    cat('up, ')
 
   # ---- Project Up ----
   G = NormIn %*% t(layer$ffn_gate.weight) #Gate
   U = NormIn %*% t(layer$ffn_up.weight) #Up Weights
   # G, U: [n_tokens, feed_forward_length]
 
+    cat('gate, ')
+
   # ---- Activate Weights ----
   Activation = SiLU(G) * U
   # Activation: [n_tokens, feed_forward_length]
+
+    cat('down.')
 
   # ---- Project Down ----
   Out = Activation %*% t(layer$ffn_down.weight)

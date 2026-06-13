@@ -27,7 +27,18 @@ read_gguf = function(path = default_path, info_only=FALSE){
   on.exit(close(con)) #close connection when done
 
   #---- General Utils ----
-  if (!exists("progress", mode = "function")) progress = function(i,total) sprintf('%3s%s',round(100*i/total),'%') #fallback if using this function outside of the package
+  #progress bar string 60% [======    ]
+  progress = function(i,total,steps=10) {
+    perc = round(100*i/total)
+    sofar = floor(steps * i/total)
+    paste0(
+      sprintf('%3s',perc),
+      "% [",
+      paste0(rep('=',sofar),collapse=''),
+      paste0(rep(' ',steps-sofar),collapse=''),
+      "]"
+    )
+  }
 
   #---- Raw-Reading Utils ----
   where = function() seek(con) #get current position

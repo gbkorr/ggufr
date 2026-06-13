@@ -1,26 +1,6 @@
 
 
 
-#we need to match the provided template (model$metadata$tokenizer.chat_template$value), because it's strongly baked into RoPE
-template = function(prompt){
-  #interestingly, it appears that "<|im_start|>" and related control words are not in the vocabulary.
-  paste0(
-    "<|im_start|>system\n",
-    "## Metadata\n\n",
-    "Knowledge Cutoff Date: June 2025\n",
-    "Today Date: ", strftime(Sys.time(),"%d %B %Y"),"\n",
-    "Reasoning Mode: /no_think\n\n",
-    "## Custom Instructions\n\n",
-    "You are a helpful AI assistant named SmolLM, trained by Hugging Face.\n\n",
-    "\n\n",
-    "<|im_end|>\n",
-    "<|im_start|>user\n",prompt,"<|im_end|>\n"
-  )
-  #\n is handled properly by the tokenizer, shows up as "Ċ" after ggml_encode
-}
-#to speed things up, we could actually pre-tokenize most of this, but it doesn't matter much.
-
-
 
 BPE = function(str,model){
   tokens = strsplit(str,'') |> unlist() #start with every character as a token
@@ -105,7 +85,7 @@ tokenize = function(prompt,model){
   chunks = match
   tokens = c()
   for (i in 1:length(chunks)) {
-    cat(sep='','\r',progress(i,length(chunks)),' Merging tokens... (chunk ',i,')')
+    cat(sep='','\rMerging tokens (chunk ',i,' / ',length(chunks),')')
     tokens = c(tokens, BPE(chunks[i],model))
   }
   cat('\n')
@@ -168,3 +148,54 @@ ggml_decode = function(str) {
 
 
 
+
+
+
+#adapted from model$metadata$tokenizer.chat_template
+template = function(prompt, model, instructions = NULL){
+  if (is.null(instructions)) instructions = "You are a helpful AI assistant named Rnold, running in the R language. You like to respond in single sentences."
+  #GGUF's default: "You are a helpful AI assistant named SmolLM, trained by Hugging Face.\n\n"
+
+  #    <|im_start|>system
+  #    \n
+  #    ## Metadata
+  #    \n\n
+  #    Reasoning Mode: /no_think
+  #    \n\n
+  #    ## Custom Instructions\n
+  #    \n
+  #    [[instructions]]
+  #    \n\n
+  #    <|im_end|>
+  #    \n
+  #    <|im_start|>user
+  #    \n
+  #    [[prompt]]
+  #    \n\n
+  #    <|im_end|>
+  #    \n
+  #    <|im_start|>assistant
+  #    \n
+  #    <think>
+  #    \n\n
+  #    </think>
+  #    \n
+
+  #<|im_start|> 128012
+  #<|im_end|> 128013
+  #<think> 128003
+  #</think> 128004
+
+  #tokenize() can't actually find the right tokens for <|im_start|>, so I've assembled the prompt with manual token IDs!
+
+  c(
+    128012, 9126, 199,
+    568, 34690, 272, 26198, 288, 14905, 26, 612, 2202, 5979, 772, 272, 568, 8573, 39398, 272,
+    tokenize (instructions, model),
+    272, 128013, 199,
+    128012, 883, 199,
+    tokenize (prompt, model),
+    272, 128013, 199,
+    128012, 78192, 199, 128003, 272, 128004, 199
+  )
+}
