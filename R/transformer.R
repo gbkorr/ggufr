@@ -1,11 +1,7 @@
 
 #"especially interesting is tracking the dimensions as it goes trhough the model"
-
-#Issues might be caused by:
-# adding to KV cache on bottom vs top (bottom feels more right?)
-# incorrect rope?
-# needs/is expecting chat template?
-# ^most likely, and something to set up anyway
+#  warning('in the qmd, step through this process for the input layer, showing graphs of the image during.')
+# can I animate this? watching the bar for each layer is quite boring
 
 #please add formulae for each of these
 softmax = function(v){x = exp(v - max(v)); x / sum(x)}
@@ -44,7 +40,6 @@ Attention = function(input, layer, model, pos){
   #pos = In the entire conversation, this is the Nth token.
 
   #input: [n_tokens, embedding_length] <- indicates dimension of a variable; [rows, columns]
-  warning('in the qmd, step through this process for the input layer, showing graphs of the image during.')
 
   # ---- Variables ----
   n_tokens = nrow(input)

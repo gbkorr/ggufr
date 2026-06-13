@@ -5,13 +5,14 @@ unembed = function(input, embd, norm, epsilon){
   logits = input %*% t(embd)
   probs = softmax(logits)
 
+  visualize(probs,model)
+
   pick(probs)
 }
-pick = function(probs){
+pick = function(probs) sample(1:length(probs), 1, prob=probs) #pick based on softmax
+visualize = function(probs, model){
   top5 = order(probs, decreasing=TRUE)[1:5]
-  cat(sep='', paste(reverse_token_lookup(top5), collapse = '\t\t'), '\n', paste(round(probs[top5]*100), collapse = '\t\t'),'\n')
-
-  sample(1:length(probs), 1, prob=probs) #pick based on softmax
+  cat(sep='', paste(reverse_token_lookup(top5,model), collapse = '\t'), '\n', paste(round(probs[top5]*100),'%',sep='', collapse = '\t'),'\n')
 }
 
 
@@ -64,7 +65,7 @@ infer = function(prompt,model){
 
     output = unembed(input, embedding$token_embd.weight, embedding$output_norm.weight, RMSN_epsilon) #get token id
     response = paste0(response, reverse_token_lookup(output,model))
-    print(response)
+    cat('\n',response,'\n',sep='')
     #CHECK FOR EOF
 
     input = embedding$token_embd.weight[output,,drop=FALSE]
