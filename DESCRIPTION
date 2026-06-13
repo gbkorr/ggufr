@@ -1,6 +1,6 @@
 Package: ggufr
 Type: Package
-Title: GGUF Inferencer
+Title: GGUF Inferencer in base R
 Version: 0.1.0
 Author: Gabriel Broussard Korr
 Maintainer: <mantis9877@gmail.com>

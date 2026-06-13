@@ -284,7 +284,7 @@ read_gguf = function(path = default_path, info_only=FALSE){
   n_blocks = metadata$smollm3.block_count$value
   for (i in 1:n_blocks){
     block = i-1 #0-indexed
-    layer = list(id=block)
+    layer = list()
     tensor_names = c(
       "attn_k.weight",
       "attn_norm.weight",

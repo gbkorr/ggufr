@@ -1,6 +1,11 @@
 
 #"especially interesting is tracking the dimensions as it goes trhough the model"
 
+#Issues might be caused by:
+# adding to KV cache on bottom vs top (bottom feels more right?)
+# incorrect rope?
+# needs/is expecting chat template?
+# ^most likely, and something to set up anyway
 
 #please add formulae for each of these
 softmax = function(v){x = exp(v - max(v)); x / sum(x)}
@@ -32,7 +37,7 @@ RoPE = function(v, pos, base, dims){
 
 
 #pass state matrix through a transformation layer
-Attention = function(input, layer, pos, model){
+Attention = function(input, layer, model, pos){
   #If loading the model, input has 2048 columns and rows equal to the number of tokens in the prompt.
   #If generating a token, input is 1 x 2048. (2048 being the embedding length). MUST be a matrix, not a vector!
 
@@ -64,16 +69,6 @@ Attention = function(input, layer, pos, model){
   # Q: [n_tokens, embedding_length]
   # KV: [n_tokens, head_dim * heads_kv]
 
-  # ---- Retrieve and Cache KV ----
-  cache = paste0('blk.',layer$id,'.KV.rds')
-  KV = readRDS(cache)
-  K = c(KV$K, K) #append new values
-  V = c(KV$V, V)
-  KV$K = K
-  KV$V = V
-  saveRDS(KV, cache, compress=TRUE)
-  # KV: [n_all_tokens_so_far, head_dim * heads_kv]
-
   # ---- Break QKV into Heads ----
   q = vector('list',heads_q)
   k = vector('list',heads_kv)
@@ -91,7 +86,6 @@ Attention = function(input, layer, pos, model){
 
   # ---- Apply RoPE ----
   #SmolLM3 skips every fourth layer (and calls this technique "NoPE", but I like to call it "Skipping Rope").
-  warning('you need to recache the tensors to get id')
   if (layer$id %% 4 != 3){
     #apply RoPE to each Q head, row-by-row
     #(remember, when generating a regular token, there's only one row)
@@ -104,9 +98,21 @@ Attention = function(input, layer, pos, model){
     }
   }
 
+  # ---- Retrieve and Cache KV ----
+  cache = paste0(model$dir,'blk.',layer$id,'.kv.rds')
+  kv = readRDS(cache)
+  for (i in 1:heads_kv) {
+    k[[i]] = rbind(kv$k[[i]], k[[i]]) #append new (rope-rotated) values as the bottom (newest) row
+    v[[i]] = rbind(kv$v[[i]], v[[i]]) #v wasn't rotated
+    kv$k[[i]] = k[[i]]
+    kv$v[[i]] = v[[i]]
+  } #this is slow :(
+  saveRDS(kv, cache, compress=TRUE)
+  # kv: list of length heads_kv, [n_all_tokens_so_far, head_dim]
+
   # ---- Apply Attention ----
   ctx = vector('list',heads_q)
-  mask = matrix(0,n_tokens,n_tokens); mask[upper.tri(mask)] = -Inf #causal mask; each token can only respond to previous ones
+  mask = matrix(0,nrow(q[[1]]),nrow(k[[1]])); mask[upper.tri(mask)] = -Inf #causal mask; each token can only respond to previous ones
   for (i in 1:heads_q) { #get ctx for each Q head
     kv_head = ceiling(i/(heads_q/heads_kv)) #which kv head? (each kv head is used for 4 q heads, hence GQA architecture)
     ctx[[i]] = attend(q[[i]], k[[kv_head]], v[[kv_head]], head_dim, mask)
@@ -139,8 +145,8 @@ FFN = function(input, layer, model) {
   # NormIn: [n_tokens, embedding_length]
 
   # ---- Project Up ----
-  G = NormX %*% t(get_tensor('blk.i.ffn_gate.weight',block)) #Gate
-  U = NormX %*% t(get_tensor('blk.i.ffn_up.weight',block)) #Up Weights
+  G = NormIn %*% t(layer$ffn_gate.weight) #Gate
+  U = NormIn %*% t(layer$ffn_up.weight) #Up Weights
   # G, U: [n_tokens, feed_forward_length]
 
   # ---- Activate Weights ----
@@ -148,28 +154,11 @@ FFN = function(input, layer, model) {
   # Activation: [n_tokens, feed_forward_length]
 
   # ---- Project Down ----
-  Out = Context %*% t(layer$ffn_down.weight)
+  Out = Activation %*% t(layer$ffn_down.weight)
   # Out: [n_tokens, embedding_length]
 
   # ---- Add to Input
   input + Out
 }
 
-
-
-# ----  -----
-
-#put this in inferencer.R
-
-#n_layers = smollm3.block_count
-
-#initialize KV cache
-#for (layer in 1:n_layers){
-#  filename = paste0('blk.',layer,'.KV.rds')
-#  saveRDS(list(k=list(),v=list()),filename,compress=FALSE)
-#}
-
-#layer = readRDS(model$dir,paste0('blk.',layer,'.rds'))
-#remember to exit generation when eof token is reached
-#and put ggml_intToUtf8 in deembed
 
