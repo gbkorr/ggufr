@@ -18,6 +18,11 @@ download_model = function(path = default_path){
     curl::curl_download(url="https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q8_0.gguf",path,quiet=FALSE)
   }
 }
+delete_model = function(path = default_path){
+  if (readline(paste0("This will delete the file:\n", path,"\nIs this OK? Y/n ")) %in% c('Y','y','Yes','yes')){
+    file.remove(path)
+  }
+}
 
 #this function can read any GGUF if you set info_only=TRUE
 
@@ -233,7 +238,7 @@ read_gguf = function(path = default_path, info_only=FALSE){
     jump(model$blob + tensor$offset)
 
     output = tensor_types[[tensor$type]](length/size, verbose)
-    matrix(output, tensor$rows, tensor$cols, byrow=TRUE) #yeesh
+    matrix(output, tensor$rows, tensor$cols, byrow=TRUE) #byrow=TRUE: EXTREMELY IMPORTANT! Tensors are stored row-by-row in the raw data, but R defaults to filling matrices column-by-column.
   }
 
   #only F32 and Q8_0 are needed for this model. All we need to do is parse the quantized data format into R doubles
@@ -327,12 +332,14 @@ view_metadata = function(model){
   df = df[,-c(1,4)]
   colnames(df) = c('type','start','value')
   View(df,'Metadata')
+  df
 }
 
 view_tensors = function(model){
   df = list2DF(model$tensors) |> t()
   colnames(df) = c('cols','rows','type','offset')
   View(df,'Tensors')
+  df
 }
 
 

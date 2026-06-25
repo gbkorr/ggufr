@@ -6,6 +6,7 @@ BPE = function(str,model){
   tokens = strsplit(str,'') |> unlist() #start with every character as a token
   for (t in 1:length(tokens)) tokens[t] = ggml_encode(tokens[t]) #convert invis characters to something visible, I hate this step
 
+  #read the merges as raw bytes
   con = rawConnection(model$raw_merges)
   on.exit(close(con))
   count = model$merge_size
@@ -153,8 +154,10 @@ ggml_decode = function(str) {
 
 #adapted from model$metadata$tokenizer.chat_template
 template = function(prompt, model, instructions = NULL){
-  if (is.null(instructions)) instructions = "You are a helpful AI assistant named Rnold, running in the R language. You like to respond in single sentences."
+  if (is.null(instructions)) instructions = "You are a helpful AI assistant named Rnold, running in the R language. You usually respond in single sentences."
   #GGUF's default: "You are a helpful AI assistant named SmolLM, trained by Hugging Face.\n\n"
+
+  # -- This is a minimized version of the chat template provided by the GGUF: --
 
   #    <|im_start|>system
   #    \n
@@ -181,12 +184,15 @@ template = function(prompt, model, instructions = NULL){
   #    </think>
   #    \n
 
+  # -- Control token reference: --
+  # (You can see these with `tokens[token_types == 2]`; control tokens start at token index 128000)
   #<|im_start|> 128012
   #<|im_end|> 128013
   #<think> 128003
   #</think> 128004
 
-  #tokenize() can't actually find the right tokens for <|im_start|>, so I've assembled the prompt with manual token IDs!
+  #The control tokens aren't present in merges, so I can't use tokenize() on them
+  #so I had to assemble the prompt with token IDs manually!
 
   c(
     128012, 9126, 199,
