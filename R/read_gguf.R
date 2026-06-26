@@ -28,6 +28,8 @@ delete_model = function(path = default_path){
 
 #R is REALLY bad at reading raw, so this function is more complex than it has to be :(
 read_gguf = function(path = default_path, info_only=FALSE){
+  if (!(readline("This will cache 25GB of tensors, which will be deleted when you close R. Is this OK? Y/n ") %in% c('Y','y','Yes','yes'))) {print('Aborted.'); return()}
+
   con = file(path,'rb') #start reading file
   on.exit(close(con)) #close connection when done
 

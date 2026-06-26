@@ -155,34 +155,31 @@ ggml_decode = function(str) {
 #adapted from model$metadata$tokenizer.chat_template
 template = function(prompt, model, instructions = NULL){
   if (is.null(instructions)) instructions = "You are a helpful AI assistant named Rnold, running in the R language. You usually respond in single sentences."
-  #GGUF's default: "You are a helpful AI assistant named SmolLM, trained by Hugging Face.\n\n"
+  #GGUF's default: "You are a helpful AI assistant named SmolLM, trained by Hugging Face."
 
   # -- This is a minimized version of the chat template provided by the GGUF: --
 
   #    <|im_start|>system
-  #    \n
   #    ## Metadata
-  #    \n\n
+  #
   #    Reasoning Mode: /no_think
-  #    \n\n
-  #    ## Custom Instructions\n
-  #    \n
+  #
+  #    ## Custom Instructions
+  #
   #    [[instructions]]
-  #    \n\n
+  #
   #    <|im_end|>
-  #    \n
   #    <|im_start|>user
-  #    \n
+  #
   #    [[prompt]]
-  #    \n\n
+  #
   #    <|im_end|>
-  #    \n
   #    <|im_start|>assistant
-  #    \n
   #    <think>
-  #    \n\n
+  #
   #    </think>
-  #    \n
+  #
+
 
   # -- Control token reference: --
   # (You can see these with `tokens[token_types == 2]`; control tokens start at token index 128000)
