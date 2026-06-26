@@ -14,6 +14,7 @@
 default_path = paste0(tools::R_user_dir('ggufr'),"/SmolLM3-3B-Q8_0.gguf")
 
 download_model = function(path = default_path){
+  if (!dir.exists(path)) dir.create(path, recursive = TRUE)
   if (readline("This will download a 3GB file. Is this OK? Y/n ") %in% c('Y','y','Yes','yes')){
     curl::curl_download(url="https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q8_0.gguf",path,quiet=FALSE)
   }
@@ -62,7 +63,7 @@ read_gguf = function(path = default_path, info_only=FALSE){
   uint = function(n_bits) bin(n_bits/8) |> as.uint()
   int = function(n_bits) bin(n_bits/8) |> as.int()
   float = function(n_bits) {
-    if (n_bits == 16) bin(2) |> as.float() #R can't parse float16s natively D;
+    if (n_bits == 16) bin(2) |> as.float16() #R can't parse float16s natively D;
     else readBin(con, 'numeric', size = n_bits/8)
   }
 
