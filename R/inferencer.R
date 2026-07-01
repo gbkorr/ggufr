@@ -25,7 +25,7 @@ visualize = function(probs, model){
 
 
 
-infer = function(prompt,model,instructions=NULL,use_template=TRUE,temperature = 1){
+infer = function(prompt,model,instructions=NULL,use_template=TRUE,show_template=FALSE,temperature = 1){
   n_layers = model$metadata$smollm3.block_count$value
   RMSN_epsilon = model$metadata$smollm3.attention.layer_norm_rms_epsilon$value
 
@@ -36,7 +36,11 @@ infer = function(prompt,model,instructions=NULL,use_template=TRUE,temperature = 
   # ---- Tokenize Prompt ----
   if (!use_template) input_tokens = tokenize(prompt, model)
   else input_tokens = template(prompt, model, instructions)
-  response = paste(collapse='',reverse_token_lookup(input_tokens, model))
+
+  if (!use_template) response = prompt
+  else if (show_template) response = paste(collapse='',reverse_token_lookup(input_tokens, model)) #full template
+  else response = paste0(prompt,'\n\n') #clean view of just prompt
+
 
   cat('Embedding...\n')
   embedding = readRDS(paste0(model$dir,'embeddings.rds'))
@@ -103,6 +107,8 @@ infer = function(prompt,model,instructions=NULL,use_template=TRUE,temperature = 
     rm(embedding); gc(FALSE) #purge embedding from memory
   }
 
+  #return response
+  response
 }
 
 

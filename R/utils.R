@@ -13,5 +13,5 @@ progress = function(i,total,steps=10) {
   )
 }
 
-time_since = function(t) strftime(as.numeric(Sys.time()) - t - 57600, '%H:%M:%S') #why does strftime(0, '%H') == 16??
+time_since = function(t) format(as.POSIXct(as.numeric(Sys.time()) - t, tz="UTC"), '%H:%M:%S')
 

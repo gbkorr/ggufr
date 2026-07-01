@@ -11,4 +11,5 @@ LazyData: true
 URL: https://github.com/gbkorr/ggufr
 BugReports: https://github.com/gbkorr/ggufr/issues
 Imports: 
-    curl
+    curl,
+    re
