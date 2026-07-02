@@ -1,6 +1,6 @@
-WIP gguf inferencer in pure R.
+gguf inferencer in pure R. (+ the `re` package for regex)
 
-This repo/package exist to host the code for my writeup (coming soon), to make it convenient to test out.
+This repo/package exist to host the code for my [writeup](https://gbkorr.github.io/r-bites/ggufr/ggufr), to make it convenient to try out for yourself.
 
 
 

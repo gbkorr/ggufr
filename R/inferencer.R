@@ -101,7 +101,6 @@ infer = function(prompt,model,instructions=NULL,use_template=TRUE,show_template=
         round(total_token_time), ' seconds per token (', round(1/total_token_time,4), ' tps).\n'
     )
 
-
     input = embedding$token_embd.weight[output,,drop=FALSE]
 
     rm(embedding); gc(FALSE) #purge embedding from memory

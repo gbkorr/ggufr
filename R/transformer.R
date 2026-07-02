@@ -19,7 +19,7 @@ RoPE = function(v, pos, base, dims){
   X = v[odds]
   Y = v[evens]
 
-  #treat the first half of the dimensions as x positions, and the second half as y
+  #treat the half of the dimensions as x positions, and the other half as y
   #rotate these coordinate pairs, and return the new values
 
   v[odds] = X * cos(angles) - Y * sin(angles)
