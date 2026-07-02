@@ -1,9 +1,3 @@
-
-#"especially interesting is tracking the dimensions as it goes trhough the model"
-#  warning('in the qmd, step through this process for the input layer, showing graphs of the image during.')
-# can I animate this? watching the bar for each layer is quite boring
-
-#please add formulae for each of these
 softmax = function(v){x = exp(v - max(v)); x / sum(x)}
 attend = function(q,k,v,head_dim,mask){ #qkv heads
   qk = t(apply( #apply softmax to each row

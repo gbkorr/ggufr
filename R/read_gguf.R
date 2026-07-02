@@ -1,15 +1,3 @@
-#remember to REMOVE tensors folder from the codebase, since you should be using the tempdir
-#also, don't save the model? keep option to disable cache tensors?
-#preferably give less control over caching— just download the model to start, and go through the long tempdir loading every time you use it
-
-
-#the point of this project is more to have a readable codebase for understanding
-#what happens— not to provide great user-facing functions.
-
-#the read_gguf and tokenizer functions are there (and pretty neat) if you want to read them, but the focus is on the transformer
-
-#"some people know how the car parts work... I just like making the car and driving around"
-
 
 default_path = paste0(tools::R_user_dir('ggufr'),"/SmolLM3-3B-Q8_0.gguf")
 
@@ -26,8 +14,6 @@ delete_model = function(path = default_path){
 }
 
 #this function can read any GGUF if you set info_only=TRUE
-
-#R is REALLY bad at reading raw, so this function is more complex than it has to be :(
 read_gguf = function(path = default_path, info_only=FALSE){
   if (!(readline("This will cache 25GB of tensors, which will be deleted when you close R. Is this OK? Y/n ") %in% c('Y','y','Yes','yes'))) {print('Aborted.'); return()}
 
