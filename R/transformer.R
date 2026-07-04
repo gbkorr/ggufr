@@ -12,7 +12,7 @@ RMSN = function(v, norm, epsilon) norm * v / sqrt(mean(v^2) + epsilon)
 RoPE = function(v, pos, base, dims){
   angles = pos * base ^ -(2*(1:(dims/2) - 1)/dims)
 
-  #interleaved?
+  #interleaved
   odds = seq(1, dims, by = 2)
   evens = seq(2, dims, by = 2)
 
@@ -130,7 +130,7 @@ Attention = function(input, layer, model, pos){
   for (i in 1:heads_q) Context[,head_dim * (i - 1) + 1:head_dim] = ctx[[i]] #recombine ctx heads, the inverse of how we broke up Q
   # Context: [n_tokens, embedding_length]
 
-  # ---- Project Output ----
+  # ---- Weight Output ----
   Out = Context %*% t(layer$attn_output.weight)
   # Out: [n_tokens, embedding_length]
 
